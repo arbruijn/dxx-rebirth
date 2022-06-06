@@ -513,6 +513,7 @@ struct briefing : window
 	unsigned streamcount;
 	short	level_num;
 	short	cur_screen;
+	short	page_num;
 	std::unique_ptr<briefing_screen, briefing_screen_deleter> screen;
 	grs_main_bitmap background;
 	animating_bitmap_type animating_bitmap;
@@ -535,7 +536,7 @@ struct briefing : window
 	const char	*message;
 	int		text_x, text_y;
 	short	tab_stop;
-	fix64		start_time;
+	fix64		start_time, page_start_time, animated_bitmap_time;
 	fix64		delay_count;
 	int		robot_num;
 	grs_subcanvas_ptr	robot_canv;
@@ -889,7 +890,12 @@ static int briefing_process_char(grs_canvas &canvas, briefing *const br)
 			br->printing_channel.reset();
 #endif
 
-			br->new_page = 1;
+			char filename[14];
+			snprintf(filename, sizeof(filename), "s%02d%c.ogg", br->cur_screen + 1, 'a' + br->page_num + 1);
+			if (PHYSFSX_exists(filename, 1))
+				br->new_page = 1;
+			else
+				br->new_screen = 1;
 
 			while (*br->message != 10) {
 				br->message++;	//	drop carriage return after special escape sequence
@@ -1101,6 +1107,69 @@ static void flash_cursor(grs_canvas &canvas, const grs_font &cv_font, briefing *
 #define EXIT_DOOR_MAX   14
 #define OTHER_THING_MAX 10      // Adam: This is the number of frames in your new animating thing.
 
+#define KEY_DELAY_DEFAULT_D1 ((F1_0*28)/1000)
+
+#if 0
+static void update_animated_bitmap(briefing *br)
+{
+	char		*pound_signp;
+	int		num, dig1, dig2;
+
+	while (br->animated_bitmap_time <= timer_query()) {
+		br->animated_bitmap_time += KEY_DELAY_DEFAULT_D1 / 2;
+		if (br->door_div_count) {
+			br->door_div_count--;
+			continue;
+		}
+		br->door_div_count = DOOR_DIV_INIT;
+		if (!br->bitmap_name[0])
+			continue;
+
+		pound_signp = strchr(&br->bitmap_name[0], '#');
+		Assert(pound_signp != NULL);
+
+		dig1 = *(pound_signp+1);
+		dig2 = *(pound_signp+2);
+		if (dig2 == 0)
+			num = dig1-'0';
+		else
+			num = (dig1-'0')*10 + (dig2-'0');
+
+		switch (br->animating_bitmap)
+		{
+			case briefing::animating_bitmap_type::loop:
+				num += static_cast<int8_t>(br->door_dir);
+				if (num > EXIT_DOOR_MAX) {
+					num = EXIT_DOOR_MAX;
+					br->door_dir = briefing::door_direction::backward;
+					br->door_div_count = 64;
+				} else if (num < 0) {
+					num = 0;
+					br->door_dir = briefing::door_direction::forward;
+					br->door_div_count = 64;
+				}
+				break;
+			case briefing::animating_bitmap_type::reset:
+				num++;
+				if (num > OTHER_THING_MAX)
+					num = 0;
+				break;
+		}
+
+		Assert(num < 100);
+		if (num >= 10) {
+			*(pound_signp+1) = (num / 10) + '0';
+			*(pound_signp+2) = (num % 10) + '0';
+			*(pound_signp+3) = 0;
+		} else {
+			*(pound_signp+1) = (num % 10) + '0';
+			*(pound_signp+2) = 0;
+		}
+
+	}
+}
+#endif
+
 //-----------------------------------------------------------------------------
 static void show_animated_bitmap(grs_canvas &canvas, briefing *br)
 {
@@ -1131,6 +1200,7 @@ static void show_animated_bitmap(grs_canvas &canvas, briefing *br)
 
 	br->door_div_count = DOOR_DIV_INIT;
 
+	#if 1
 	if (br->bitmap_name[0] != 0) {
 		char		*pound_signp;
 		int		num, dig1, dig2;
@@ -1212,6 +1282,7 @@ static void show_animated_bitmap(grs_canvas &canvas, briefing *br)
 				break;
 		}
 	}
+	#endif
 }
 
 }
@@ -1237,6 +1308,20 @@ static void show_briefing_bitmap(grs_canvas &canvas, grs_bitmap *bmp)
 //-----------------------------------------------------------------------------
 namespace dsx {
 namespace {
+static void press_enter()
+{
+	SDL_Event ev;
+	memset(&ev, 0, sizeof(ev));
+	ev.type = SDL_KEYDOWN;
+	ev.key.state = SDL_PRESSED;
+	ev.key.keysym.sym = SDLK_RETURN;
+	SDL_PushEvent(&ev);
+	ev.type = SDL_KEYUP;
+	ev.key.state = SDL_RELEASED;
+	ev.key.keysym.sym = SDLK_RETURN;
+	SDL_PushEvent(&ev);
+}
+
 static void init_spinning_robot(grs_canvas &canvas, briefing &br) //(int x,int y,int w,int h)
 {
 	br.robot_canv = create_spinning_robot_sub_canvas(canvas);
@@ -1247,7 +1332,8 @@ static void show_spinning_robot_frame(briefing *br, int robot_num)
 	auto &Robot_info = LevelSharedRobotInfoState.Robot_info;
 	if (robot_num != -1) {
 		br->robot_angles.p = br->robot_angles.b = 0;
-		br->robot_angles.h += 150;
+		//br->robot_angles.h += 150;
+		br->robot_angles.h = (timer_query() - br->page_start_time) * 150 / (KEY_DELAY_DEFAULT_D1 / 2);
 
 		assert(Robot_info[robot_num].model_num != polygon_model_index::None);
 		auto &Polygon_models = LevelSharedPolygonModelState.Polygon_models;
@@ -1257,6 +1343,7 @@ static void show_spinning_robot_frame(briefing *br, int robot_num)
 
 //-----------------------------------------------------------------------------
 #define KEY_DELAY_DEFAULT       ((F1_0*20)/1000)
+
 
 [[nodiscard]]
 static int init_new_page(grs_canvas &canvas, briefing *br)
@@ -1282,7 +1369,15 @@ static int init_new_page(grs_canvas &canvas, briefing *br)
 #endif
 
 	br->start_time = 0;
+	br->page_start_time = timer_query();
+	br->animated_bitmap_time = timer_query();
 	br->delay_count = KEY_DELAY_DEFAULT;
+
+	br->page_num++;
+	char filename[14];
+	snprintf(filename, sizeof(filename), "s%02d%c.ogg", br->cur_screen + 1, 'a' + br->page_num);
+	songs_play_file(filename, 0, press_enter);
+
 	return r;
 }
 
@@ -1467,6 +1562,7 @@ static int new_briefing_screen(grs_canvas &canvas, briefing *br, int first)
 		br->cur_screen++;
 
 	auto &&d1_briefing_screens = get_d1_briefing_screens(descent_hog_size);
+	#if 0
 	while (br->cur_screen < num_d1_briefing_screens && d1_briefing_screens[br->cur_screen].level_num != br->level_num)
 	{
 		br->cur_screen++;
@@ -1476,6 +1572,15 @@ static int new_briefing_screen(grs_canvas &canvas, briefing *br, int first)
 			br->level_num++;
 			br->cur_screen = 0;
 		}
+	}
+	#endif
+
+	while (br->cur_screen < num_d1_briefing_screens) {
+		char filename[14];
+		snprintf(filename, sizeof(filename), "s%02d.ogg", br->cur_screen + 1);
+		if (PHYSFSX_exists(filename, 1))
+			break;
+		br->cur_screen++;
 	}
 
 	if (br->cur_screen == num_d1_briefing_screens)
@@ -1545,12 +1650,27 @@ static int new_briefing_screen(grs_canvas &canvas, briefing *br, int first)
 	br->bitmap_name[0] = 0;
 	br->guy_bitmap.reset();
 	br->prev_ch = -1;
+	br->page_num = 0;
 
 #if defined(DXX_BUILD_DESCENT_II)
 	if (songs_is_playing() == -1 && !br->hum_channel)
 		br->hum_channel.reset(digi_start_sound(digi_xlat_sound(SOUND_BRIEFING_HUM), F1_0/2, sound_pan{0x7fff}, 1, -1, -1, sound_object_none));
+#else
+	char filename[14];
+	snprintf(filename, sizeof(filename), "s%02d.ogg", br->cur_screen + 1);
+	songs_play_file(filename, 0, press_enter);
 #endif
 
+	return 1;
+}
+
+static int briefing_advance(briefing *br) {
+	if (br->new_screen)
+		return new_briefing_screen(*grd_curcanv, br, 0);
+	else if (br->new_page)
+		return init_new_page(*grd_curcanv, br);
+	else
+		br->delay_count = 0;
 	return 1;
 }
 
@@ -1571,20 +1691,8 @@ window_event_result briefing::event_handler(const d_event &event)
 		case EVENT_MOUSE_BUTTON_DOWN:
 			if (event_mouse_get_button(event) == mbtn::left)
 			{
-				if (this->new_screen)
-				{
-					if (!new_briefing_screen(*grd_curcanv, this, 0))
-					{
-						return window_event_result::close;
-					}
-				}
-				else if (this->new_page)
-				{
-					if (!init_new_page(*grd_curcanv, this))
-						return window_event_result::close;
-				}
-				else
-					this->delay_count = 0;
+				if (!briefing_advance(this))
+					return window_event_result::close;
 				return window_event_result::handled;
 			}
 			break;
@@ -1595,20 +1703,8 @@ window_event_result briefing::event_handler(const d_event &event)
 			// reasons, so we build a reasonable facsimile right here
 			if (event_joystick_get_button(event) == 1)
 				return window_event_result::close;
-			if (this->new_screen)
-			{
-				if (!new_briefing_screen(*grd_curcanv, this, 0))
-				{
-					return window_event_result::close;
-				}
-			}
-			else if (this->new_page)
-			{
-				if (!init_new_page(*grd_curcanv, this))
-					return window_event_result::close;
-			}
-			else
-				this->delay_count = 0;
+			if (!briefing_advance(this))
+				return window_event_result::close;
 			return window_event_result::handled;
 #endif
 
@@ -1632,18 +1728,8 @@ window_event_result briefing::event_handler(const d_event &event)
 				default:
 					if ((result = call_default_handler(event)) != window_event_result::ignored)
 						return result;
-					else if (this->new_screen)
-					{
-						if (!new_briefing_screen(*grd_curcanv, this, 0))
-						{
-							return window_event_result::close;
-						}
-					}
-					else if (this->new_page)
-					{
-						if (!init_new_page(*grd_curcanv, this))
-							return window_event_result::close;
-					}
+					else if (!briefing_advance(this))
+						return window_event_result::close;
 					break;
 			}
 			break;
@@ -1744,6 +1830,7 @@ void do_briefing_screens(const d_fname &filename, int level_num)
 	// Stay where we are in the stack frame until briefing done
 	// Too complicated otherwise
 		event_process_all();
+	songs_stop_all();
 }
 
 void do_end_briefing_screens(const d_fname &filename)
