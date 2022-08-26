@@ -547,10 +547,10 @@ struct briefing : window
 	std::array<msgstream, 2048> messagestream;
 };
 
-static void briefing_init(briefing *br, short level_num)
+static void briefing_init(briefing *br, short level_num, int played_movie)
 {
 	br->level_num = level_num;
-	if (EMULATING_D1 && (br->level_num == 1))
+	if (EMULATING_D1 && (br->level_num == 1) && !played_movie)
 		br->level_num = 0;	// for start of game stuff
 
 	br->cur_screen = 0;
@@ -890,12 +890,16 @@ static int briefing_process_char(grs_canvas &canvas, briefing *const br)
 			br->printing_channel.reset();
 #endif
 
+			#if 0
 			char filename[14];
 			snprintf(filename, sizeof(filename), "s%02d%c.ogg", br->cur_screen + 1, 'a' + br->page_num + 1);
 			if (PHYSFSX_exists(filename, 1))
 				br->new_page = 1;
 			else
 				br->new_screen = 1;
+			#else
+			br->new_page = 1;
+			#endif
 
 			while (*br->message != 10) {
 				br->message++;	//	drop carriage return after special escape sequence
@@ -1374,9 +1378,13 @@ static int init_new_page(grs_canvas &canvas, briefing *br)
 	br->delay_count = KEY_DELAY_DEFAULT;
 
 	br->page_num++;
-	char filename[14];
-	snprintf(filename, sizeof(filename), "s%02d%c.ogg", br->cur_screen + 1, 'a' + br->page_num);
-	songs_play_file(filename, 0, press_enter);
+
+	if (PLAYING_BUILTIN_MISSION) {
+		char filename[14];
+		snprintf(filename, sizeof(filename), "s%02d%c.ogg", br->cur_screen + 1, 'a' + br->page_num);
+		if (PHYSFSX_exists(filename, 1))
+			songs_play_file(filename, 0, press_enter);
+	}
 
 	return r;
 }
@@ -1562,7 +1570,7 @@ static int new_briefing_screen(grs_canvas &canvas, briefing *br, int first)
 		br->cur_screen++;
 
 	auto &&d1_briefing_screens = get_d1_briefing_screens(descent_hog_size);
-	#if 0
+	#if 1
 	while (br->cur_screen < num_d1_briefing_screens && d1_briefing_screens[br->cur_screen].level_num != br->level_num)
 	{
 		br->cur_screen++;
@@ -1575,6 +1583,7 @@ static int new_briefing_screen(grs_canvas &canvas, briefing *br, int first)
 	}
 	#endif
 
+	#if 0
 	while (br->cur_screen < num_d1_briefing_screens) {
 		char filename[14];
 		snprintf(filename, sizeof(filename), "s%02d.ogg", br->cur_screen + 1);
@@ -1582,6 +1591,7 @@ static int new_briefing_screen(grs_canvas &canvas, briefing *br, int first)
 			break;
 		br->cur_screen++;
 	}
+	#endif
 
 	if (br->cur_screen == num_d1_briefing_screens)
 		return 0;		// finished
@@ -1656,9 +1666,12 @@ static int new_briefing_screen(grs_canvas &canvas, briefing *br, int first)
 	if (songs_is_playing() == -1 && !br->hum_channel)
 		br->hum_channel.reset(digi_start_sound(digi_xlat_sound(SOUND_BRIEFING_HUM), F1_0/2, sound_pan{0x7fff}, 1, -1, -1, sound_object_none));
 #else
-	char filename[14];
-	snprintf(filename, sizeof(filename), "s%02d.ogg", br->cur_screen + 1);
-	songs_play_file(filename, 0, press_enter);
+	if (PLAYING_BUILTIN_MISSION) {
+		char filename[14];
+		snprintf(filename, sizeof(filename), "s%02d.ogg", br->cur_screen + 1);
+		if (PHYSFSX_exists(filename, 1))
+			songs_play_file(filename, 0, press_enter);
+	}
 #endif
 
 	return 1;
@@ -1792,11 +1805,24 @@ window_event_result briefing::event_handler(const d_event &event)
 
 void do_briefing_screens(const d_fname &filename, int level_num)
 {
+	int played_movie = 0;
+
 	if (!*static_cast<const char *>(filename))
 		return;
 
+	#ifdef BUILD_DESCENT_I
+	if (EMULATING_D1 && PLAYING_BUILTIN_MISSION && level_num == 1 &&
+		PHYSFSX_exists("d1intro.webm", 1)) {
+		int play_webm_movie(const char *fn);
+		if (play_webm_movie("d1intro.webm")) {
+			event_process_all();
+			played_movie = 1;
+		}
+	}
+	#endif
+
 	auto br = window_create<briefing>(grd_curscreen->sc_canvas);
-	briefing_init(br, level_num);
+	briefing_init(br, level_num, played_movie);
 
 	if (!load_screen_text(filename, br->text))
 	{

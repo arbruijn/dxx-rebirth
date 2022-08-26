@@ -4391,6 +4391,9 @@ class DXXCommon(LazyObjectConstructor):
 			add_flags['CPPPATH'].append(user_settings.builddir)
 		if user_settings.editor:
 			add_flags['CPPPATH'].append('common/include/editor')
+		add_flags['CPPPATH'].append('d1x-rebirth/webm')
+		add_flags['LIBS'].append('vorbis')
+		add_flags['LIBS'].append('vpx')
 		CLVar = SCons.Util.CLVar
 		for flags in ('CPPFLAGS', 'CXXFLAGS', 'LIBS', 'LINKFLAGS'):
 			value = getattr(self.user_settings, flags)
@@ -5295,6 +5298,19 @@ class D1XProgram(DXXProgram):
 		__get_dsx_objects_common=DXXCommon.create_lazy_object_states_getter((LazyObjectState(sources=(
 'd1x-rebirth/main/custom.cpp',
 'd1x-rebirth/main/snddecom.cpp',
+'d1x-rebirth/main/progress.cpp',
+'d1x-rebirth/webm/audio_decoder.cpp',
+'d1x-rebirth/webm/file_reader.cpp',
+'d1x-rebirth/webm/frame_buffer.cpp',
+'d1x-rebirth/webm/frame.cpp',
+'d1x-rebirth/webm/packet.cpp',
+'d1x-rebirth/webm/player.cpp',
+'d1x-rebirth/webm/timer.cpp',
+'d1x-rebirth/webm/utils.cpp',
+'d1x-rebirth/webm/video_player.cpp',
+'d1x-rebirth/webm/webm_player.cpp',
+'d1x-rebirth/webm/mkvparser/mkvparser.cc',
+'d1x-rebirth/webm/mkvparser/mkvreader.cc',
 ),
 	),
 	LazyObjectState(sources=(

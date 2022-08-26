@@ -56,7 +56,7 @@ arch_atexit arch_init()
 {
 	int t;
 
-	if (SDL_Init(SDL_INIT_VIDEO) < 0)
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE) < 0)
 		Error("SDL library initialisation failed: %s.",SDL_GetError());
 #if DXX_USE_SDLIMAGE
 	IMG_Init(0);

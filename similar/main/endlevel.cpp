@@ -463,6 +463,12 @@ void free_endlevel_data()
 
 }
 
+#ifdef DXX_BUILD_DESCENT_I
+namespace d1x {
+int play_exit_movie(int level);
+}
+#endif
+
 namespace dsx {
 
 namespace {
@@ -539,6 +545,21 @@ static movie_play_status start_endlevel_movie()
 		gr_palette = save_pal;
 	}
 	return (r);
+}
+#else
+enum class movie_play_status : uint8_t
+{
+    skipped,   // movie wasn't present
+    started,    // movie was present and started; it may or may not have completed
+};
+static auto endlevel_movie_played = movie_play_status::skipped;
+
+static movie_play_status start_endlevel_movie()
+{
+	if (!::d1x::play_exit_movie(Current_level_num))
+		return movie_play_status::skipped;
+	event_process_all();	
+	return movie_play_status::started;
 }
 #endif
 
@@ -706,10 +727,6 @@ window_event_result start_endlevel_sequence()
 		multi::dispatch->do_protocol_frame(1, 1);
 	}
 
-#if defined(DXX_BUILD_DESCENT_I)
-	if (!endlevel_data_loaded)
-#elif defined(DXX_BUILD_DESCENT_II)
-
 	if (PLAYING_BUILTIN_MISSION) // only play movie for built-in mission
 		if (!(Game_mode & GM_MULTI))
 		{
@@ -720,7 +737,6 @@ window_event_result start_endlevel_sequence()
 		}
 
 	if (!(!(Game_mode & GM_MULTI) && (endlevel_movie_played == movie_play_status::skipped) && endlevel_data_loaded))
-#endif
 	{
 		return PlayerFinishedLevel(next_level_request_secret_flag::only_normal_level);		//done with level
 	}

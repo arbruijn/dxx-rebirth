@@ -166,7 +166,7 @@ int gr_init()
 	if (gr_installed==1)
 		return -1;
 
-	if (SDL_Init(SDL_INIT_VIDEO) < 0)
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE) < 0)
 	{
 		Error("SDL library video initialisation failed: %s.",SDL_GetError());
 	}

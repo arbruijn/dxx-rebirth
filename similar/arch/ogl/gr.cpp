@@ -99,6 +99,8 @@ static int sdl_no_modeswitch;
 enum { sdl_no_modeswitch = 0 };
 #endif
 
+static SDL_Surface *screen;
+
 }
 
 namespace dsx {
@@ -164,6 +166,12 @@ void ogl_swap_buffers_internal(void)
 #endif
 #endif
 	sync_helper.after_swap();
+}
+
+SDL_Surface *gr_get_sdl_screen(void);
+SDL_Surface *gr_get_sdl_screen(void)
+{
+	return screen;
 }
 
 }
@@ -386,7 +394,7 @@ static int ogl_init_window(int w, int h)
 		}
 	}
 
-	if (!SDL_SetVideoMode(use_x, use_y, use_bpp, use_flags))
+	if (!(screen = SDL_SetVideoMode(use_x, use_y, use_bpp, use_flags)))
 	{
 #ifdef RPI
 		con_printf(CON_URGENT, "Could not set %dx%dx%d opengl video mode: %s\n (Ignored for RPI)",

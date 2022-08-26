@@ -192,7 +192,8 @@ std::pair<RWops_ptr, PHYSFS_ErrorCode> PHYSFSRWOPS_openRead(const char *fname)
 std::pair<RWops_ptr, PHYSFS_ErrorCode> PHYSFSRWOPS_openReadBuffered(const char *fname, const PHYSFS_uint64 bufferSize)
 {
 	RAIIPHYSFS_File fp{PHYSFS_openRead(fname)};
-	PHYSFS_setBuffer(fp, bufferSize);
+	if (fp)
+		PHYSFS_setBuffer(fp, bufferSize);
 	return create_rwops(std::move(fp));
 }
 

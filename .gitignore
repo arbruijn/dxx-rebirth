@@ -52,3 +52,10 @@ xcuserdata
 # Brewfile installation artifacts
 #################################
 Brewfile.lock.json
+
+*~
+build/
+build1/
+buildg/
+.gdb_history
+*.webm

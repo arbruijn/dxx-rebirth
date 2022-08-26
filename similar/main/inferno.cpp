@@ -726,6 +726,8 @@ static int main(int argc, char *argv[])
 #endif
 	{
 		Game_mode = {};
+		//extern void DoProgressing(void);
+		//DoProgressing();
 		DoMenu();
 	}
 
