@@ -345,7 +345,7 @@ static void video_callback(const uint8_t *rgb, int w, int h, void *data)
 	//ogl_ubitblt_i(w*scale, h*scale, dstx, dsty,
 	//	w, h, 0, 0, *bm, grd_curcanv->cv_bitmap, (GameCfg_MovieTexFilt) ? opengl_texture_filter::trilinear : opengl_texture_filter::classic);
 
-	ogl_ubitmapm_cs(*grd_curcanv, dstx, dsty, w, h, *bm, ogl_colors::white);
+	ogl_ubitmapm_cs(*grd_curcanv, dstx, dsty, w*scale, h*scale, *bm, ogl_colors::white);
 
 	glEnable (GL_BLEND);
 	//gr_flip();
@@ -359,9 +359,9 @@ struct webm_movie : ::dcx::window
 	//using ::dcx::window::window;
 	virtual window_event_result event_handler(const d_event &) override;
 
+	RWops_ptr file;
 	wp::WebmPlayer player;
 	grs_main_bitmap bm;
-	RWops_ptr file;
 	webm_movie(grs_canvas &src, int x, int y, int w, int h, RWops_ptr f) :
 		window(src, x, y, w, h), file(std::move(f)) {}
 };

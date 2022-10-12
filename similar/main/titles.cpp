@@ -1810,8 +1810,8 @@ void do_briefing_screens(const d_fname &filename, int level_num)
 	if (!*static_cast<const char *>(filename))
 		return;
 
-	#ifdef BUILD_DESCENT_I
-	if (EMULATING_D1 && PLAYING_BUILTIN_MISSION && level_num == 1 &&
+	#ifdef DXX_BUILD_DESCENT_I
+	if (/*EMULATING_D1 && */PLAYING_BUILTIN_MISSION && level_num == 1 &&
 		PHYSFSX_exists("d1intro.webm", 1)) {
 		int play_webm_movie(const char *fn);
 		if (play_webm_movie("d1intro.webm")) {

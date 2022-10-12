@@ -113,6 +113,8 @@ COPYRIGHT 1993-1999 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #define GLITZ_BACKGROUND	Menu_pcx_name
 
 namespace d1x {
+int play_webm_movie(const char *fn);
+
 namespace {
 
 static int8_t find_next_level(const next_level_request_secret_flag secret_flag, const int current_level_num, const Mission &mission)
@@ -1736,6 +1738,12 @@ static void DoEndGame()
 #if defined(DXX_BUILD_DESCENT_II)
 		auto played = PlayMovie(ENDMOVIE ".tex", ENDMOVIE ".mve", play_movie_warn_missing::urgent);
 		if (played == movie_play_status::skipped)
+#else
+		if (PHYSFSX_exists("d1end.webm", 1) && play_webm_movie("d1end.webm"))
+		{
+			event_process_all();
+		}
+		else
 #endif
 		{
 			do_end_briefing_screens(Current_mission->ending_text_filename);

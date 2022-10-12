@@ -10,7 +10,7 @@
 #include <algorithm>
 
 #ifdef _WIN32
-#if _MSC_VER
+#ifdef _MSC_VER
 #define NOMINMAX
 #include <Windows.h>
 #endif

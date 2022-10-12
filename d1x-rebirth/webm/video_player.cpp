@@ -694,7 +694,7 @@ namespace uvpx
         const int frameCount = pBlock->GetFrameCount();
         const long long discard_padding = pBlock->GetDiscardPadding();
 
-        for (int i = 0; i < frameCount; ++i)
+        for (int i = 0; i < frameCount && m_threadRunning.load(); ++i)
         {
             const mkvparser::Block::Frame& theFrame = pBlock->GetFrame(i);
             const long size = theFrame.len;
@@ -722,7 +722,7 @@ namespace uvpx
                 vpx_codec_iter_t  iter = NULL;
                 vpx_image *img = nullptr;
 
-                while ((img = vpx_codec_get_frame(&m_decoderData.codec, &iter)))
+                while ((img = vpx_codec_get_frame(&m_decoderData.codec, &iter)) && m_threadRunning.load())
                 {
                     if (img && img->fmt != VPX_IMG_FMT_I420)
                     {
@@ -734,6 +734,9 @@ namespace uvpx
 
                     updateYUVData(p->time());
                     m_framesDecoded++;
+
+                    if (!m_threadRunning.load())
+                        break;
                 }
 
                 break;

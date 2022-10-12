@@ -44,7 +44,7 @@ namespace wp
 		#else
 		float buf[4096];
 		int samples = len / 2;
-		int16_t *dst = (int16_t *)stream;
+		int16_t *dst = reinterpret_cast<int16_t *>(stream);
 
 		if (samples > 4096)
 			abort();
@@ -73,9 +73,11 @@ namespace wp
 				int g = v * -299 / 419 + u * -114 / 331;
 				int b = u * 587 / 331;
 				int y1 = yp[0], y2 = yp[1];
+				//y1 += y1 >> 4; y2 += y2 >> 4;
 				rgb[0] = bclamp(y1 + r); rgb[1] = bclamp(y1 + g); rgb[2] = bclamp(y1 + b);
 				rgb[3] = bclamp(y2 + r); rgb[4] = bclamp(y2 + g); rgb[5] = bclamp(y2 + b);
 				y1 = yp[ypitch]; y2 = yp[ypitch + 1];
+				//y1 += y1 >> 4; y2 += y2 >> 4;
 				rgb2[0] = bclamp(y1 + r); rgb2[1] = bclamp(y1 + g); rgb2[2] = bclamp(y1 + b);
 				rgb2[3] = bclamp(y2 + r); rgb2[4] = bclamp(y2 + g); rgb2[5] = bclamp(y2 + b);
 				yp += 2;
@@ -115,7 +117,7 @@ namespace wp
 			return false;
 
 		// print some video stats
-		printInfo();
+		//printInfo();
 
 		return true;
 	}
@@ -145,7 +147,7 @@ namespace wp
 			break;
 
 		default:
-			log("Failed to load video (%d)", (int)res);
+			log("Failed to load video (%d)", res);
 			return false;
 		}
 

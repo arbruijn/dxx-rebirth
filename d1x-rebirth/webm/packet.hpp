@@ -1,7 +1,7 @@
 #ifndef _UVPX_PACKET_H_
 #define _UVPX_PACKET_H_
 
-#include <webm/mkvparser.hpp>
+#include "mkvparser/mkvparser.h"
 
 namespace uvpx
 {

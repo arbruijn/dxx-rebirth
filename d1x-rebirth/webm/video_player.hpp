@@ -15,7 +15,7 @@
 #include <vpx/vpx_decoder.h>
 #include <vpx/vp8dx.h>
 
-#include <webm/mkvparser.hpp>
+#include "mkvparser/mkvparser.h"
 
 #include "audio_decoder.hpp"
 #include "buffer.hpp"

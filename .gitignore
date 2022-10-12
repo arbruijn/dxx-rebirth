@@ -57,5 +57,6 @@ Brewfile.lock.json
 build/
 build1/
 buildg/
+buildw/
 .gdb_history
 *.webm

@@ -2337,7 +2337,7 @@ bool CuePoint::Load(IMkvReader* pReader) {
     pos += size;  // consume payload
   }
 
-  m_track_positions_count = static_cast<size_t>(track_positions_count);
+  m_track_positions_count = /*static_cast<size_t>*/(track_positions_count);
 
   if (m_timecode < 0 || m_track_positions_count <= 0) {
     return false;

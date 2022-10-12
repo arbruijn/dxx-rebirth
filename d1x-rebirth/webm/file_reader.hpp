@@ -1,7 +1,7 @@
 #ifndef _UVPX_FILE_READER_H_
 #define _UVPX_FILE_READER_H_
 
-#include <webm/mkvreader.hpp>
+#include "mkvparser/mkvreader.h"
 #include <SDL.h>
 
 namespace uvpx
