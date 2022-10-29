@@ -382,7 +382,7 @@ window_event_result webm_movie::event_handler(const d_event &event)
 			break;
 
 		case EVENT_WINDOW_CLOSE:
-			printf("movie closed\n");
+			//printf("movie closed\n");
 			#if 0
 			player.destroy();
 			if (!CGameArg.SndNoSound && CGameArg.SndDisableSdlMixer)

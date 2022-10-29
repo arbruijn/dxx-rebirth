@@ -25,6 +25,8 @@ namespace uvpx
 
         double  m_time;
 
+        int m_i444;
+
     public:
         Frame(size_t width, size_t height);
         ~Frame();
@@ -48,6 +50,9 @@ namespace uvpx
 
         void  setTime(double time);
         double  time() const;
+
+        void setI444(int i444);
+        int i444() const;
     };
 }
 #endif  // _UVPX_FRAME_H_

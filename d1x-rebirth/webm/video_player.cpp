@@ -344,9 +344,10 @@ namespace uvpx
         //const int w = m_decoderData.img->d_w;
         const int h = m_decoderData.img->d_h;
         //const int w2 = w / 2;
-        const int h2 = h / 2;
+        const int h_uv = m_decoderData.img->fmt ==  VPX_IMG_FMT_I420 ? h / 2 : h;
 
         Frame *curYUV = m_frameBuffer->lockWrite(time);
+        curYUV->setI444(m_decoderData.img->fmt != VPX_IMG_FMT_I420);
 
         unsigned char *y = curYUV->y();
         unsigned char *u = curYUV->u();
@@ -361,8 +362,8 @@ namespace uvpx
         const int stride_v = m_decoderData.img->stride[VPX_PLANE_V];
 
         memcpy(y, src_y, stride_y * h);
-        memcpy(u, src_u, stride_u * h2);
-        memcpy(v, src_v, stride_v * h2);
+        memcpy(u, src_u, stride_u * h_uv);
+        memcpy(v, src_v, stride_v * h_uv);
 
         m_frameBuffer->unlockWrite();
     }
@@ -724,7 +725,7 @@ namespace uvpx
 
                 while ((img = vpx_codec_get_frame(&m_decoderData.codec, &iter)) && m_threadRunning.load())
                 {
-                    if (img && img->fmt != VPX_IMG_FMT_I420)
+                    if (img && img->fmt != VPX_IMG_FMT_I420 && img->fmt != VPX_IMG_FMT_I444)
                     {
                         threadError(UVPX_UNSUPPORTED_IMAGE_FORMAT, "Unsupported image format: %d", img->fmt);
                         break;

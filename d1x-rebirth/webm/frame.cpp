@@ -8,14 +8,15 @@ namespace uvpx
     Frame::Frame(size_t width, size_t height) :
         m_width(0), m_height(0),
         m_displayWidth(width), m_displayHeight(height),
-        m_time(0.0)
+        m_time(0.0),
+        m_i444(0)
     {
         // vpx size is +64 aligned to 16
         m_width = (((width + 64) - 1) & ~15) + 16;
         m_height = (((height + 64) - 1) & ~15) + 16;
 
         m_ySize = m_width * m_height;
-        m_uvSize = (m_width / 2) * (m_height / 2);
+        m_uvSize = m_width * m_height; //(m_width / 2) * (m_height / 2);
 
         m_y = new unsigned char[m_ySize];
         m_u = new unsigned char[m_uvSize];
@@ -66,7 +67,7 @@ namespace uvpx
 
     size_t Frame::uvPitch() const
     {
-        return m_width / 2;
+        return m_i444 ? m_width : m_width / 2;
     }
 
     size_t Frame::width() const
@@ -99,10 +100,21 @@ namespace uvpx
         return m_time;
     }
 
+    void  Frame::setI444(int i444)
+    {
+        m_i444 = i444;
+    }
+
+    int  Frame::i444() const
+    {
+        return m_i444;
+    }
+
     void Frame::copy(Frame *dst)
     {
         std::memcpy(dst->y(), m_y, m_ySize);
         std::memcpy(dst->u(), m_u, m_uvSize);
         std::memcpy(dst->v(), m_v, m_uvSize);
+        dst->setI444(m_i444);
     }
 }

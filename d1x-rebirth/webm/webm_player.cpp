@@ -91,6 +91,30 @@ namespace wp
 		}
 	}
 
+	#define S 20
+	#define TO_S(x) (static_cast<int32_t>((x)*(1<<S)))
+
+	// coefficients from https://www.silicondust.com/yuv-to-rgb-conversion-for-tv-video/
+	__attribute__((optimize("-O3")))
+	static void yuv444ToRgb(uint8_t *ybuf, uint8_t *ubuf, uint8_t *vbuf, int ypitch, int uvpitch,
+		uint8_t *rgb, int w, int h)
+	{
+		while (h--) {
+			uint8_t *yp = ybuf, *up = ubuf, *vp = vbuf;
+			for (int i = w; i--; ) {
+				int y = *yp++ * TO_S(1.1643835616), u = *up++, v = *vp++;
+				int r = (y + v * TO_S(1.7927410714) - TO_S(248.100994) + (1<<(S-1))) >> S;
+				int g = (y - u * TO_S(0.2132486143) - v * TO_S(0.5329093286) + TO_S(76.878080) + (1<<(S-1))) >> S;
+				int b = (y + u * TO_S(2.1124017857) - TO_S(289.017566) + (1<<(S-1))) >> S;
+				rgb[0] = bclamp(r); rgb[1] = bclamp(g); rgb[2] = bclamp(b);
+				rgb += 3;
+			}
+			ybuf += ypitch;
+			ubuf += uvpitch;
+			vbuf += uvpitch;
+		}
+	}
+
 	WebmPlayer::WebmPlayer()
 	{
 	}
@@ -122,9 +146,17 @@ namespace wp
 		return true;
 	}
 
+	#if 0
+	static void webmDebugLog(const char *msg)
+	{
+		puts(msg);
+	}
+	#endif
+
 	bool WebmPlayer::loadVideo(SDL_RWops *file)
 	{
 		m_video = new uvpx::Player(uvpx::Player::defaultConfig());
+		//m_video->setDebugLog(webmDebugLog);
 
 		uvpx::Player::LoadResult res = m_video->load(file, 0, false);
 
@@ -143,7 +175,7 @@ namespace wp
 			return false;
 
 		case uvpx::Player::LoadResult::Success:
-			log("Video loaded successfully");
+			//log("Video loaded successfully");
 			break;
 
 		default:
@@ -254,7 +286,10 @@ namespace wp
 		if ((yuv = m_video->lockRead()) != nullptr)
 		{
 			#if 1
-			yuvToRgb(yuv->y(), yuv->u(), yuv->v(), yuv->yPitch(), yuv->uvPitch(), m_rgb, m_width, m_height);
+			if (yuv->i444())
+				yuv444ToRgb(yuv->y(), yuv->u(), yuv->v(), yuv->yPitch(), yuv->uvPitch(), m_rgb, m_width, m_height);
+			else
+				yuvToRgb(yuv->y(), yuv->u(), yuv->v(), yuv->yPitch(), yuv->uvPitch(), m_rgb, m_width, m_height);
 			m_video->unlockRead();
 			if (m_video_cb)
 				m_video_cb(m_rgb, m_width, m_height, m_video_cb_data);
