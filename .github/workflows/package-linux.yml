@@ -21,7 +21,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install gcc-10 g++-10
-          sudo apt-get install -y scons libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libphysfs-dev
+          sudo apt-get install -y scons libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libphysfs-dev libvpx-dev
           
       - name: Configure and build
         run: scons -j`nproc` opengl=1 sdl2=1 sdlmixer=1
