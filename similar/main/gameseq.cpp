@@ -1653,6 +1653,9 @@ void EnterSecretLevel(void)
 	{
 		set_screen_mode(SCREEN_MENU);
 		do_screen_message("Alternate Exit Found!\n\nProceeding to Secret Level!");
+#if defined(DXX_BUILD_DESCENT_I)
+		DoProgressing(Next_level_num);
+#endif
 		StartNewLevel(Next_level_num);
 	} else {
  	   	StartNewLevelSecret(Next_level_num, 1);
@@ -1838,6 +1841,7 @@ static window_event_result (AdvanceLevel)(
 	} else {
 #if defined(DXX_BUILD_DESCENT_I)
 		const auto Next_level_num = find_next_level(secret_flag, Current_level_num, *Current_mission.get());
+		DoProgressing(Next_level_num);
 #elif defined(DXX_BUILD_DESCENT_II)
 		int8_t Next_level_num;
 

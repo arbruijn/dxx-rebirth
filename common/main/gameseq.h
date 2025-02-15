@@ -141,6 +141,8 @@ namespace dsx {
 #if defined(DXX_BUILD_DESCENT_II)
 int p_secret_level_destroyed();
 void do_cloak_invul_secret_stuff(fix64 old_gametime, player_info &player_info);
+#else
+int DoProgressing(int next_level);
 #endif
 void EnterSecretLevel(void);
 void init_player_stats_new_ship(playernum_t pnum);

@@ -998,6 +998,12 @@ window_event_result do_new_game_menu()
 			}
 		};
 		items_type menu_items{Current_mission->mission_name, last_level, clamped_player_highest_level};
+#if defined(DXX_BUILD_DESCENT_I)
+		if (PLAYING_BUILTIN_MISSION) {
+			if ((new_level_num = DoProgressing(-100)) == -1)
+				return window_event_result::handled;
+		} else
+#endif
 		for (;;)
 		{
 			struct select_start_level_menu : passive_newmenu

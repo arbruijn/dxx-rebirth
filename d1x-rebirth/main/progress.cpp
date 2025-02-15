@@ -9,7 +9,10 @@
 #include "screens.h"
 #include "key.h"
 #include "config.h"
+#include "gameseq.h"
 #include "physfsrwops.h"
+#include "game.h"
+#include "args.h"
 
 namespace d1x {
 int play_webm_movie(const char *const filename);
@@ -21,7 +24,7 @@ int play_webm_movie(const char *const filename);
 
 static const char *bms_files[] = { "map01.pcx", "map02.pcx", "map03.pcx", "ship01.pcx", "ship02.pcx" };
 
-struct solarmap : ::dcx::window
+struct solarmap final : ::dcx::window
 {
 	using ::dcx::window::window;
 	palette_array_t pals[5];
@@ -31,7 +34,17 @@ struct solarmap : ::dcx::window
 	fix64 start_time;
 	float step;
 	int ship_idx;
+	int next_idx;
+	int end_idx;
+	int reversed;
+	int ending;
+	int done;
+	int select;
+	fix64 last_frame;
+	fix frame_time;
+	solarmap(grs_canvas &src, int x, int y, int w, int h);
 	virtual window_event_result event_handler(const d_event &) override;
+	void move(int dir);
 };
 
 #define NUM_LVLINFO 34
@@ -74,16 +87,16 @@ struct {
 	{ 26, 2, 267, 108, "Pluto Military Base" },
 	{ 27, 2, 296, 98, "Charon Volatile Mine" } };
 
-
-void DoProgressing();
-//void draw_solarmap(solarmap &sm);
-
 static void show_bitmap_at(grs_canvas &canvas, grs_bitmap &bmp, int x, int y, int w, int h)
 {
 	const bool hiresmode = 0; //HIRESMODE;
 	const auto sw = static_cast<float>(SWIDTH) / (hiresmode ? 640 : 320);
 	const auto sh = static_cast<float>(SHEIGHT) / (hiresmode ? 480 : 240);
 	const float scale = (sw < sh) ? sw : sh;
+
+	#if 1
+	ogl_ubitmapm_cs(canvas, x * scale, y * scale, (w ? w : bmp.bm_w)*scale, (h ? h : bmp.bm_h)*scale, bmp, ogl_colors::white);
+	#else
 	int org_h = bmp.bm_h, org_w = bmp.bm_w;
 	const color_palette_index *org_data = bmp.bm_data;
 
@@ -92,7 +105,7 @@ static void show_bitmap_at(grs_canvas &canvas, grs_bitmap &bmp, int x, int y, in
 	if (h && y + h > 200)
 		bmp.bm_h = h = 200 - y;
 	if (w && x < 0) {
-		org_data += -x;
+		gr_set_bitmap_data(bmp, org_data + -x);
 		bmp.bm_w = w = w + x;
 		x = 0;
 	}
@@ -101,8 +114,9 @@ static void show_bitmap_at(grs_canvas &canvas, grs_bitmap &bmp, int x, int y, in
 	show_fullscr(*bitmap_canv, bmp);
 	bmp.bm_w = org_w;
 	bmp.bm_h = org_h;
-	bmp.bm_data = org_data;
+	gr_set_bitmap_data(bmp, org_data);
 	//ogl_ubitmapm_cs(canvas, x*scale, y*scale, (w ? w : bmp.bm_w)*scale, (h ? h : bmp.bm_h)*scale, bmp, ogl_colors::white); 
+	#endif
 }
 
 #if 0
@@ -123,7 +137,9 @@ static void draw_solarmap(solarmap &sm)
 	auto canv = gr_create_sub_canvas(*grd_curcanv, 0, 20*scale, 320*scale, 200*scale);
 	int cur_map = lvlinfo[sm.ship_idx].map;
 	fix64 time = timer_query() - sm.start_time;
-	bool hide_cur = time < F2_0 && (time & (1 << 13));
+	bool hide_cur = !sm.select && !sm.ending && time < F2_0 && (time & (1 << 13));
+
+	gr_clear_canvas(*grd_curcanv, BM_XRGB(0,0,0));
 
 	gr_palette_load(gr_palette = sm.pals[BMS_MAP + cur_map]);
 
@@ -139,7 +155,7 @@ static void draw_solarmap(solarmap &sm)
 	color_palette_index c1 = 1; //BM_XRGB(0, 4, 0);
 	color_palette_index c2 = 2; //BM_XRGB(0, 7, 0);
 	color_palette_index c3 = 3; //BM_XRGB(0, 14, 0);
-	for (int i = 0; i < NUM_LVLINFO - 1; i++) {
+	for (int i = 0; i < NUM_LVLINFO - 1 && i < sm.end_idx; i++) {
 		if (lvlinfo[i].map != cur_map || lvlinfo[i + 1].map != cur_map)
 			continue;
 		if (hide_cur && i == sm.ship_idx) {
@@ -167,38 +183,109 @@ static void draw_solarmap(solarmap &sm)
 		}
 	}
 
-	int next_idx = sm.ship_idx + 1;
-	while (lvlinfo[next_idx].level <= -100)
-		next_idx++;
-	gr_string(*canv, *MEDIUM1_FONT, 0x8000, 4 * scale, "Progressing to");
-	gr_string(*canv, *MEDIUM1_FONT, 0x8000, (4 + 2) * scale + MEDIUM1_FONT->ft_h,
-		lvlinfo[next_idx].name);
+	//int next_idx = sm.ship_idx + 1;
+	//while (lvlinfo[next_idx].level <= -100)
+	//	next_idx++;
+	int next_idx = sm.next_idx;
+	if (sm.select) {
+		int idx = sm.ship_idx;
+		if (lvlinfo[idx].level < 0) // secret or transition
+			idx += sm.reversed ? -1 : 1;
+		gr_string(*canv, *MEDIUM3_FONT, 0x8000, 4 * scale, "Select starting level");
+		gr_string(*canv, *MEDIUM1_FONT, 0x8000, (4 + 2) * scale + FNTScaleY * MEDIUM1_FONT->ft_h,
+			lvlinfo[idx].name);
+	} else {
+		gr_string(*canv, *MEDIUM1_FONT, 0x8000, 4 * scale, "Progressing to");
+		gr_string(*canv, *MEDIUM1_FONT, 0x8000, (4 + 2) * scale + FNTScaleY * MEDIUM1_FONT->ft_h,
+			lvlinfo[next_idx].name);
+	}
 
 	//int x = fixmul(lvlinfo[sm.ship_idx].x, F1_0 - sm.step) + fixmul(lvlinfo[sm.ship_idx + 1].x, sm.step);
 	//int y = fixmul(lvlinfo[sm.ship_idx].y, F1_0 - sm.step) + fixmul(lvlinfo[sm.ship_idx + 1].y, sm.step);
-	int x = lvlinfo[sm.ship_idx].x * (1 - sm.step) + lvlinfo[sm.ship_idx + 1].x * sm.step;
-	int y = lvlinfo[sm.ship_idx].y * (1 - sm.step) + lvlinfo[sm.ship_idx + 1].y * sm.step;
+	int dir = sm.reversed ? -1 : 1;
+	int x = lvlinfo[sm.ship_idx].x * (1 - sm.step) + lvlinfo[sm.ship_idx + dir].x * sm.step;
+	int y = lvlinfo[sm.ship_idx].y * (1 - sm.step) + lvlinfo[sm.ship_idx + dir].y * sm.step;
 
-	int ship_type = lvlinfo[sm.ship_idx].map != 0;
+	int ship_type = (lvlinfo[sm.ship_idx].map != 0) ^ sm.reversed;
 	gr_palette_load(gr_palette = sm.pals[BMS_SHIP + ship_type]);
 	show_bitmap_at(*canv, sm.bms[BMS_SHIP + ship_type], x - 24, y - 13, 48, 27);
 	
-	if (1 || time > F2_0) {
+	if (sm.ship_idx == sm.next_idx) {
+		if (!sm.ending) {
+			sm.start_time = timer_query();
+			sm.ending = 1;
+		} else if (time > F2_0 && !sm.select)
+			sm.done = 1;
+	} else if (time > F2_0 || sm.select) {
 		if (sm.step < 1) {
-			int dx = lvlinfo[sm.ship_idx + 1].x - lvlinfo[sm.ship_idx].x;
-			int dy = lvlinfo[sm.ship_idx + 1].y - lvlinfo[sm.ship_idx].y;
+			int dx = lvlinfo[sm.ship_idx + dir].x - lvlinfo[sm.ship_idx].x;
+			int dy = lvlinfo[sm.ship_idx + dir].y - lvlinfo[sm.ship_idx].y;
 			float dist = sqrtf(dx * dx + dy * dy);
 
-			sm.step += 1.0f / dist;
+			sm.step += 1.0f / dist * f2fl(sm.frame_time) * 100;
 		}
-		if (sm.step >= 1 && sm.ship_idx + 2 < NUM_LVLINFO) {
+		if (sm.step >= 1 && (sm.reversed ? sm.ship_idx > 0 : sm.ship_idx + 1 < NUM_LVLINFO)) {
 			sm.step -= 1;
-			do {
-				sm.ship_idx++;
-			} while (lvlinfo[sm.ship_idx].level <= -100);
+			//do {
+				sm.ship_idx += dir;
+			//} while (sm.ship_idx != sm.next_idx && lvlinfo[sm.ship_idx].level <= -100);
+			if (lvlinfo[sm.ship_idx].level <= -100) // map transition
+				sm.ship_idx += dir;
+			if (sm.ship_idx == sm.next_idx) {
+				int left = lvlinfo[sm.ship_idx].map ? -1 : 1;
+				if (keyd_pressed[KEY_LEFT] || keyd_pressed[KEY_PAD4])
+					sm.move(left);
+				else if (keyd_pressed[KEY_RIGHT] || keyd_pressed[KEY_PAD6])
+					sm.move(-left);
+				sm.step = 0;
+			}
 			sm.start_time = timer_query();
 		} else if (sm.step >= 1)
 			sm.step = 1;
+	}
+}
+
+solarmap::solarmap(grs_canvas &src, int x, int y, int w, int h) :
+	window(src, x, y, w, h),
+	end_idx(NUM_LVLINFO),
+	reversed(0),
+	ending(0), done(0), select(0)
+{
+	last_frame = timer_query();
+	frame_time = FrameTime;
+}
+
+static void do_delay(fix64 &t1, fix &frame_time) {
+	fix64 t2 = timer_query();
+	const auto vsync = CGameCfg.VSync;
+	const auto bound = F1_0 / (vsync ? MAXIMUM_FPS : CGameArg.SysMaxFPS);
+	const auto may_sleep = !CGameArg.SysNoNiceFPS && !vsync;
+	while (t2 - t1 < bound) // ogl is fast enough that the automap can read the input too fast and you start to turn really slow.  So delay a bit (and free up some cpu :)
+	{
+		//if (Game_mode & GM_MULTI)
+		//	multi_do_frame(); // during long wait, keep packets flowing
+		if (may_sleep)
+			timer_delay(F1_0>>8);
+		t2 = timer_update();
+	}
+	frame_time=t2-t1;
+	t1 = t2;
+}
+
+void solarmap::move(int dir)
+{
+	if (dir && this->select && this->ship_idx == this->next_idx) {
+		int i = this->ship_idx;
+		for (;;) {
+			i += dir;
+			if (i < 0 || i >= NUM_LVLINFO)
+				break;
+			if (lvlinfo[i].level > 0) {
+				this->next_idx = i;
+				this->reversed = dir < 0;
+				break;
+			}
+		}
 	}
 }
 
@@ -208,15 +295,30 @@ window_event_result solarmap::event_handler(const d_event &event)
 	{
 		case EVENT_WINDOW_DRAW:
 			draw_solarmap(*this);
+			if (this->done)
+				return window_event_result::close;
+			do_delay(this->last_frame, this->frame_time);
 			break;
 			
-		case EVENT_KEY_COMMAND:
-			if (event_key_get(event) == KEY_ESC)
+		case EVENT_KEY_COMMAND: {
+			int key = event_key_get(event);
+			int left = lvlinfo[this->ship_idx].map ? -1 : 1;
+			if (key == KEY_ESC) {
 				return window_event_result::close;
+			} else if (key == KEY_ENTER || key == KEY_PADENTER) {
+				this->done = 1;
+				return window_event_result::close;
+			} else if (key == KEY_LEFT || key == KEY_PAD4) {
+				this->move(left);
+			} else if (key == KEY_RIGHT || key == KEY_PAD6) {
+				this->move(-left);
+			}
 			break;
+		}
 
-		//case EVENT_WINDOW_CLOSE:
-		//	return window_event_result::ignored;	// continue closing
+		case EVENT_WINDOW_CLOSE:
+			this->~window();
+			return window_event_result::deleted;	// skip deletion
 
 		default:
 			return window_event_result::ignored;
@@ -234,7 +336,7 @@ static void patch_pal(palette_array_t &pal) {
 }
 #endif
 
-void DoProgressing()
+int DoProgressing(int next_level)
 {
 	#if 0
 	play_webm_movie("d1intro.webm");
@@ -249,8 +351,11 @@ void DoProgressing()
 	for (int i = 0; i < BMS_NUM; i++) {
 		sm->bms[i].reset();
 		const auto pcx_error = pcx_read_bitmap_or_default(bms_files[i], sm->bms[i], sm->pals[i]);
-		if (pcx_error != pcx_result::SUCCESS)
+		if (pcx_error != pcx_result::SUCCESS) {
 			con_printf(CON_URGENT, DXX_STRINGIZE_FL(__FILE__, __LINE__, "solarmap: File %s - PCX error: %s"), bms_files[i], pcx_errormsg(pcx_error));
+			gr_init_bitmap_alloc(sm->bms[i], bm_mode::linear, 0, 0, 2, 2, 2);
+			memset(sm->bms[i].get_bitmap_data(), 0, 2 * 2);
+		}
 		if (i >= BMS_SHIP && i < BMS_SHIP + BMS_SHIP_NUM) {
 			gr_palette_load(gr_palette = sm->pals[i]);
 			gr_remap_bitmap_good(sm->bms[i], sm->pals[i], 254, -1); // fix transparent color
@@ -296,10 +401,26 @@ void DoProgressing()
 	sm->ship_dy = (i2f(lvlinfo[1].y) - i2f(lvlinfo[0].y)) / 100;
 	#endif
 	sm->step = 0;
-	sm->ship_idx = 0; //NUM_LVLINFO - 3;
+
+	if (next_level == -100) { // select
+		sm->select = 1;
+		sm->next_idx = sm->ship_idx = 0;
+		sm->end_idx = NUM_LVLINFO - 1;
+	} else { // progress
+		for (int i = 0; i < NUM_LVLINFO; i++)
+			if (lvlinfo[i].level == Current_level_num)
+				sm->ship_idx = i;
+		sm->end_idx = sm->next_idx = sm->ship_idx;
+		for (int i = 0; i < NUM_LVLINFO; i++)
+			if (lvlinfo[i].level == next_level)
+				sm->end_idx = sm->next_idx = i;
+	}
+
 	sm->start_time = timer_query();
 
-	//event_process_all();
+	event_process_all();
+
+	return sm->done ? lvlinfo[sm->ship_idx].level : -1;
 }
 
 }
@@ -354,7 +475,7 @@ static void video_callback(const uint8_t *rgb, int w, int h, void *data)
 #endif
 }
 
-struct webm_movie : ::dcx::window
+struct webm_movie final : ::dcx::window
 {
 	//using ::dcx::window::window;
 	virtual window_event_result event_handler(const d_event &) override;
